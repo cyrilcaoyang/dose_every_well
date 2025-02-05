@@ -4,6 +4,7 @@ from threading import Event
 import matplotlib.pyplot as plt
 import math
 import yaml
+from sdl_utils import get_logger
 
 
 def load_config(config_path, model_name):
@@ -80,10 +81,10 @@ class CNC_Simulator:
 
 
 class CNC_Controller:
-    def __init__(self, config):
+    def __init__(self, port, config):
         ctrl_config = config['controller']
         self.BAUD_RATE = ctrl_config['baud_rate']
-        self.SERIAL_PORT_PATH = ctrl_config['serial_port']
+        self.SERIAL_PORT_PATH = port
         self.X_LOW_BOUND = ctrl_config['x_low_bound']
         self.X_HIGH_BOUND = ctrl_config['x_high_bound']
         self.Y_LOW_BOUND = ctrl_config['y_low_bound']
@@ -91,6 +92,32 @@ class CNC_Controller:
         self.X_OFFSET = ctrl_config['x_offset']
         self.Y_OFFSET = ctrl_config['y_offset']
         self.gcode = ""
+
+    def home_xyz(self):
+        """Home all axes using machine's homing cycle"""
+        with serial.Serial(self.SERIAL_PORT_PATH, self.BAUD_RATE) as ser:
+            self.wake_up(ser)
+            # Send homing command (Grbl-specific: $H)
+            ser.write(b"$H\n")
+            self.wait_for_movement_completion(ser, "$H")
+            print("Homing completed")
+
+    def read_coordinates(self):
+        """Read current machine coordinates"""
+        with serial.Serial(self.SERIAL_PORT_PATH, self.BAUD_RATE) as ser:
+            self.wake_up(ser)
+            ser.reset_input_buffer()
+            ser.write(b"?\n")
+            time.sleep(0.1)  # Wait for response
+            response = ser.readline().decode().strip()
+
+            # Parse position from response (format: <...|MPos:x,y,z|...>)
+            if 'MPos:' in response:
+                mpos_start = response.find('MPos:') + 5
+                mpos_end = response.find('|', mpos_start)
+                coordinates = list(map(float, response[mpos_start:mpos_end].split(',')))
+                return {'X': coordinates[0], 'Y': coordinates[1], 'Z': coordinates[2]}
+            return None
 
     def wait_for_movement_completion(self, ser, cleaned_line):
         Event().wait(1)
@@ -114,6 +141,9 @@ class CNC_Controller:
 
     def move_up(self):
         self.gcode += "G0 Z0\n"
+
+    def move_to_height(self, Z):
+        self.gcode += f"G0 Z{Z}"
 
     def move_to_point(self, X, Y):
         if self.coordinates_within_bounds(X, Y):
@@ -152,17 +182,34 @@ if __name__ == "__main__":
     """
     Example usage of the liquid_cnc module.
     """
-    # To use in your code:
     try:
         detected_port = find_port()
-        print(f"Using CNC at: {detected_port}")
+        print(f"Found CNC at: {detected_port}")
     except Exception as e:
         print(f"Error: {e}")
 
-    config = load_config("config.yaml", 'Genmitsu 3018-PROVer V2')
+    config = load_config("cnc_settings.yaml", 'Genmitsu 3018-PROVer V2')
+
+    # Example instatiating the simulator and controller
     simulator = CNC_Simulator(config)
-    controller = CNC_Controller(config)
+    controller = CNC_Controller(find_port(), config)
 
     # Use the simulator and controller as needed
-    simulator.move_to_point(50, 50)
-    simulator.render_drawing()
+    # simulator.move_to_point(50, 50)
+    # simulator.render_drawing()
+
+    try:
+        controller.home_xyz()
+        coord = controller.read_coordinates()
+        print(f"Current location is {coord}")
+        controller.move_to_point(20, 20)
+        controller.render_drawing()
+        time.sleep(3)
+        controller.move_to_height(0)
+        controller.render_drawing()
+
+    finally:
+        exit
+
+
+
