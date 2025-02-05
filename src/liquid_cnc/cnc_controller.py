@@ -199,13 +199,13 @@ if __name__ == "__main__":
     # simulator.render_drawing()
 
     try:
-        controller.home_xyz()
-        coord = controller.read_coordinates()
-        print(f"Current location is {coord}")
-        controller.move_to_point(20, 20)
-        controller.render_drawing()
-        time.sleep(3)
-        controller.move_to_height(0)
+        # controller.home_xyz()
+        # coord = controller.read_coordinates()
+        # print(f"Current location is {coord}")
+        # controller.move_to_point(-140, 120)
+        # controller.render_drawing()
+        # time.sleep(3)
+        controller.move_to_height(-38)
         controller.render_drawing()
 
     finally:
