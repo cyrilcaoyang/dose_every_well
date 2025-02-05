@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools >= 61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "liquid_cnc"
+version = "0.1.0"
+description='Python package that use CNC for liquid handling'
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.8"
+dependencies = []
+
+# More at https://pypi.org/classifiers/
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "License :: MIT",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development",
+]
+
+authors = [
+    {name = "Yang Cao", email = "cyrilcaoyang@gmail.com"}
+]
+
+[tool.setuptools.package-dir]
+liquid_cnc = 'src/liquid_cnc'
