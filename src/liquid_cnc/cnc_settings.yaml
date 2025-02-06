@@ -8,9 +8,11 @@ machines:
       figure_size: [10, 5]
     controller:
       baud_rate: 115200
-      x_low_bound: 0
-      x_high_bound: 200
+      x_low_bound: -140
+      x_high_bound: 140
       y_low_bound: 0
-      y_high_bound: 100
+      y_high_bound: 120
+      z_low_bound: -38
+      z_high_bound: 0
       x_offset: 35
       y_offset: 25
