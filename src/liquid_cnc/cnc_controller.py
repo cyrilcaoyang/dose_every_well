@@ -4,7 +4,6 @@ from threading import Event
 import matplotlib.pyplot as plt
 import math
 import yaml
-from sdl_utils import get_logger
 
 
 def load_config(config_path, model_name):
