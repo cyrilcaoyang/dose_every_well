@@ -11,6 +11,7 @@ def load_config(config_path, model_name):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     return config['machines'][model_name]
+    print(f"Configuration loaded for {model_name}.")
 
 
 def find_port():
@@ -38,7 +39,6 @@ def find_port():
                 if 'ok' in response.lower() or 'grbl' in response.lower():
                     print(f"CNC detected on port: {port.device}")
                     return port.device
-
         except Exception as e:
             continue
 
@@ -158,7 +158,6 @@ class CNC_Controller:
             self.Y_LOW_BOUND <= y <= self.Y_HIGH_BOUND
         )
 
-    @staticmethod
     def wake_up(self, ser):
         ser.write(str.encode("\r\n\r\n"))
         time.sleep(1)
@@ -184,12 +183,6 @@ if __name__ == "__main__":
     """
     Example usage of the liquid_cnc module.
     """
-    try:
-        detected_port = find_port()
-        print(f"Found CNC at: {detected_port}")
-    except Exception as e:
-        print(f"Error: {e}")
-
     config = load_config("cnc_settings.yaml", 'Genmitsu 3018-PROVer V2')
 
     # Example instantiating the simulator and controller
@@ -204,19 +197,22 @@ if __name__ == "__main__":
         # Home the xyz axis
         # controller.home_xyz()
 
-        # Read machine internal coordinates
-        coord = controller.read_coordinates()
-        print(f"Current internal location is {coord}")
+        x = -140
+        y = 120
+        z = -38
 
         # Moving tool to a point on xy
-        # controller.move_to_point(-140, 120)
-        # controller.render_drawing()
-        # time.sleep(3)
+        controller.move_to_point(x, y)
+        controller.render_drawing()
 
         # Moving tool to a point on z
-        # controller.move_to_height(-38)
-        # controller.render_drawing()
+        controller.move_to_height(z)
+        controller.render_drawing()
 
+        # Read machine internal coordinates
+        coord = controller.read_coordinates()
+        print(f"Internal location is: {str(coord)}")
+        print("Actual location is: {", f"'X': {x}, 'Y': {y}, 'Z': {z}", "}")
     finally:
         exit()
 
