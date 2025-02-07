@@ -162,7 +162,7 @@ class CNC_Controller:
         ser.write(str.encode("\r\n\r\n"))
         time.sleep(1)
         ser.flushInput()
-        print("CNC machine is awake")
+        print("CNC machine is active")
 
     def render_drawing(self, buffer=20):
         with serial.Serial(self.SERIAL_PORT_PATH, self.BAUD_RATE) as ser:
@@ -190,26 +190,30 @@ if __name__ == "__main__":
     controller = CNC_Controller(find_port(), config)
 
     # Use the simulator and controller as needed
-    # simulator.move_to_point(50, 50)
+    simulator.move_to_point(50, 50)
     # simulator.render_drawing()
 
     try:
         # Home the xyz axis
         # controller.home_xyz()
-        x, y, z = -140, 120, -38
+        # print("CNC is homed.")
+
+        loading_position = (-140.0, 120.0, -38.0)
 
         # Moving tool to a point on xy
-        controller.move_to_point(x, y)
+        xy = (loading_position[0], loading_position[1])
+        controller.move_to_point(loading_position[0], loading_position[1])
         controller.render_drawing()
+        print(f"Moved (X,Y) to {xy}")
 
         # Moving tool to a point on z
-        controller.move_to_height(z)
+        controller.move_to_height(loading_position[2])
         controller.render_drawing()
+        print(f"Moved Z to {loading_position[2]}")
 
         # Read machine internal coordinates
         coord = controller.read_coordinates()
-        print(f"Internal location is: {str(coord)}")
-        print("Actual location is: {", f"'X': {x}, 'Y': {y}, 'Z': {z}", "}")
+        print(f"Internal location is: {coord}")
     finally:
         exit()
 
