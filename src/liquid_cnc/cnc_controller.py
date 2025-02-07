@@ -196,10 +196,7 @@ if __name__ == "__main__":
     try:
         # Home the xyz axis
         # controller.home_xyz()
-
-        x = -140
-        y = 120
-        z = -38
+        x, y, z = -140, 120, -38
 
         # Moving tool to a point on xy
         controller.move_to_point(x, y)
