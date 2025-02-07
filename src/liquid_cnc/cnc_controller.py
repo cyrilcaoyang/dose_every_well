@@ -88,6 +88,8 @@ class CNC_Controller:
         self.X_HIGH_BOUND = ctrl_config['x_high_bound']
         self.Y_LOW_BOUND = ctrl_config['y_low_bound']
         self.Y_HIGH_BOUND = ctrl_config['y_high_bound']
+        self.Z_LOW_BOUND = ctrl_config['z_low_bound']
+        self.Z_HIGH_BOUND = ctrl_config['z_high_bound']
         self.X_OFFSET = ctrl_config['x_offset']
         self.Y_OFFSET = ctrl_config['y_offset']
         self.gcode = ""
@@ -141,21 +143,22 @@ class CNC_Controller:
     def move_up(self):
         self.gcode += "G0 Z0\n"
 
-    def move_to_height(self, Z):
-        self.gcode += f"G0 Z{Z}"
+    def move_to_height(self, z):
+        self.gcode += f"G0 Z{z}"
 
-    def move_to_point(self, X, Y):
-        if self.coordinates_within_bounds(X, Y):
-            self.gcode += f"G0 X{X + self.X_OFFSET} Y{Y + self.Y_OFFSET}\n"
+    def move_to_point(self, x, y):
+        if self.coordinates_within_bounds(x, y):
+            self.gcode += f"G0 X{x + self.X_OFFSET} Y{y + self.Y_OFFSET}\n"
         else:
-            print(f"Cannot move to {X}, {Y}, coordinates not within bounds")
+            print(f"Cannot move to {x}, {y}, coordinates not within bounds")
 
-    def coordinates_within_bounds(self, X, Y):
+    def coordinates_within_bounds(self, x, y):
         return (
-            self.X_LOW_BOUND <= X <= self.X_HIGH_BOUND and
-            self.Y_LOW_BOUND <= Y <= self.Y_HIGH_BOUND
+            self.X_LOW_BOUND <= x <= self.X_HIGH_BOUND and
+            self.Y_LOW_BOUND <= y <= self.Y_HIGH_BOUND
         )
 
+    @staticmethod
     def wake_up(self, ser):
         ser.write(str.encode("\r\n\r\n"))
         time.sleep(1)
@@ -189,7 +192,7 @@ if __name__ == "__main__":
 
     config = load_config("cnc_settings.yaml", 'Genmitsu 3018-PROVer V2')
 
-    # Example instatiating the simulator and controller
+    # Example instantiating the simulator and controller
     simulator = CNC_Simulator(config)
     controller = CNC_Controller(find_port(), config)
 
@@ -198,17 +201,24 @@ if __name__ == "__main__":
     # simulator.render_drawing()
 
     try:
+        # Home the xyz axis
         # controller.home_xyz()
-        # coord = controller.read_coordinates()
-        # print(f"Current location is {coord}")
+
+        # Read machine internal coordinates
+        coord = controller.read_coordinates()
+        print(f"Current internal location is {coord}")
+
+        # Moving tool to a point on xy
         # controller.move_to_point(-140, 120)
         # controller.render_drawing()
         # time.sleep(3)
-        controller.move_to_height(-38)
-        controller.render_drawing()
+
+        # Moving tool to a point on z
+        # controller.move_to_height(-38)
+        # controller.render_drawing()
 
     finally:
-        exit
+        exit()
 
 
 
