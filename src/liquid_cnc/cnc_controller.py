@@ -4,14 +4,20 @@ from threading import Event
 import matplotlib.pyplot as plt
 import math
 import yaml
+import os
 
 
 def load_config(config_path, model_name):
     """Load configuration for a specific machine model"""
-    with open(config_path, 'r') as f:
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Construct the full path to the config file
+    full_config_path = os.path.join(script_dir, config_path)
+    
+    with open(full_config_path, 'r') as f:
         config = yaml.safe_load(f)
+    print(f"Configuration loaded for {model_name}.") 
     return config['machines'][model_name]
-    print(f"Configuration loaded for {model_name}.")
 
 
 def find_port():
@@ -164,7 +170,8 @@ class CNC_Controller:
         ser.flushInput()
         print("CNC machine is active")
 
-    def render_drawing(self, buffer=20):
+    def execute_movement(self, buffer=20):
+        """Execute accumulated G-code movements on the CNC machine"""
         with serial.Serial(self.SERIAL_PORT_PATH, self.BAUD_RATE) as ser:
             self.wake_up(ser)
             out_strings = []
@@ -178,44 +185,42 @@ class CNC_Controller:
                 out_strings.append(grbl_out.strip().decode('utf-8'))
             return out_strings
 
-
 if __name__ == "__main__":
     """
     Example usage of the liquid_cnc module.
     """
-    config = load_config("cnc_settings.yaml", 'Genmitsu 3018-PROVer V2')
+    #config = load_config("cnc_settings.yaml", 'Genmitsu 3018-PROVer V2')
+    config = load_config("cnc_settings.yaml", 'Genmitsu 4040 PRO')
 
     # Example instantiating the simulator and controller
-    simulator = CNC_Simulator(config)
+    # simulator = CNC_Simulator(config)
     controller = CNC_Controller(find_port(), config)
+    print(f"CNC controller initialized on port: {controller.SERIAL_PORT_PATH}")
 
     # Use the simulator and controller as needed
-    simulator.move_to_point(50, 50)
+    # simulator.move_to_point(50, 50)
     # simulator.render_drawing()
 
     try:
         # Home the xyz axis
-        # controller.home_xyz()
-        # print("CNC is homed.")
+        controller.home_xyz()
+        print("CNC is homed.")
 
-        loading_position = (-140.0, 120.0, -38.0)
+        # loading_position = (-140.0, 120.0, -38.0)
 
-        # Moving tool to a point on xy
-        xy = (loading_position[0], loading_position[1])
-        controller.move_to_point(loading_position[0], loading_position[1])
-        controller.render_drawing()
-        print(f"Moved (X,Y) to {xy}")
+        # # Moving tool to a point on xy
+        # xy = (loading_position[0], loading_position[1])
+        # controller.move_to_point(loading_position[0], loading_position[1])
+        # controller.render_drawing()
+        # print(f"Moved (X,Y) to {xy}")
 
-        # Moving tool to a point on z
-        controller.move_to_height(loading_position[2])
-        controller.render_drawing()
-        print(f"Moved Z to {loading_position[2]}")
+        # # Moving tool to a point on z
+        # controller.move_to_height(loading_position[2])
+        # controller.render_drawing()
+        # print(f"Moved Z to {loading_position[2]}")
 
-        # Read machine internal coordinates
-        coord = controller.read_coordinates()
-        print(f"Internal location is: {coord}")
+        # # Read machine internal coordinates
+        # coord = controller.read_coordinates()
+        # print(f"Internal location is: {coord}")
     finally:
         exit()
-
-
-
