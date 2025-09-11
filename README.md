@@ -1,2 +1,2 @@
-# powder_every_well
-Use cnc machine to dispens solid powder (and liquid)
+# dose_every_well
+Use a CNC machine to dispense solid powder into microplates (and liquid)
