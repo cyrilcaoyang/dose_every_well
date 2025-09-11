@@ -1,2 +1,2 @@
-# liquidCNC
-Use cnc machine to dispens liquid/act as autosampler
+# powder_every_well
+Use cnc machine to dispens solid powder (and liquid)
