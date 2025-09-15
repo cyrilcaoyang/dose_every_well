@@ -1,0 +1,36 @@
+import sys
+from pathlib import Path
+
+from liquid_cnc.cnc_controller import CNC_Controller, load_config, find_port
+from serial_monitor import SerialMonitor
+
+if __name__ == "__main__":
+
+    config = load_config ("cnc_settings.yaml", "Genmitsu 4040 PRO")
+
+    port = find_port()
+    controller = CNC_Controller (port, config)
+    gripper = SerialMonitor ("COM4", 9600) 
+    print(f"CNC controller ready on {controller.SERIAL_PORT_PATH}")
+
+    try:
+        controller.home_xyz()
+        print("The CNC has been homed.")
+
+        # Move XY
+        controller.move_to_point(-140.0, 120.0)   # example location
+        controller.move_up()                      # Z safe height
+        controller.move_to_height(-38.0)          # Z down
+
+        # Actually execute movements on CNC
+        outputs = controller.execute_movement()
+        print("Controller responses:", outputs)
+
+        # Read back current coordinates
+        coord = controller.read_coordinates()
+        print("CNC is now at:", coord)
+
+    finally:
+        print("Done.")
+
+
