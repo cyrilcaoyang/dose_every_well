@@ -115,84 +115,22 @@ class CNC_Controller:
             self.wake_up(ser)
             ser.reset_input_buffer()
             ser.write(b"?\n")
-            time.sleep(0.2)  # Wait a bit longer for response
-            
-            # Read all available data to get complete response
-            response = ser.read_all().decode().strip()
-            
+            time.sleep(0.1)  # Wait for response
+            response = ser.readline().decode().strip()
+
             # Parse position from response (format: <...|MPos:x,y,z|...>)
             if 'MPos:' in response:
                 mpos_start = response.find('MPos:') + 5
                 mpos_end = response.find('|', mpos_start)
-                if mpos_end == -1:
-                    mpos_end = len(response)
-                try:
-                    coordinates = list(map(float, response[mpos_start:mpos_end].split(',')))
-                    if len(coordinates) >= 3:
-                        return {'X': coordinates[0], 'Y': coordinates[1], 'Z': coordinates[2]}
-                except (ValueError, IndexError):
-                    pass
-            
-            # If parsing failed, try reading line by line
-            ser.reset_input_buffer()
-            ser.write(b"?\n")
-            time.sleep(0.1)
-            response = ser.readline().decode().strip()
-            
-            if 'MPos:' in response:
-                mpos_start = response.find('MPos:') + 5
-                mpos_end = response.find('|', mpos_start)
-                if mpos_end == -1:
-                    mpos_end = len(response)
-                try:
-                    coordinates = list(map(float, response[mpos_start:mpos_end].split(',')))
-                    if len(coordinates) >= 3:
-                        return {'X': coordinates[0], 'Y': coordinates[1], 'Z': coordinates[2]}
-                except (ValueError, IndexError):
-                    pass
-            
+                coordinates = list(map(float, response[mpos_start:mpos_end].split(',')))
+                return {'X': coordinates[0], 'Y': coordinates[1], 'Z': coordinates[2]}
             return None
-    
-    def is_homed(self):
-        """Check if machine is homed by verifying it's at the home position"""
-        with serial.Serial(self.SERIAL_PORT_PATH, self.BAUD_RATE) as ser:
-            self.wake_up(ser)
-            ser.reset_input_buffer()
-            
-            # Check current status and coordinates
-            ser.write(b"?\n")
-            time.sleep(0.1)
-            response = ser.readline().decode().strip()
-            
-            # Machine is homed if it's at the home position (0,0,0)
-            if 'MPos:' in response:
-                try:
-                    mpos_start = response.find('MPos:') + 5
-                    mpos_end = response.find('|', mpos_start)
-                    if mpos_end == -1:
-                        mpos_end = len(response)
-                    coordinates = list(map(float, response[mpos_start:mpos_end].split(',')))
-                    x, y, z = coordinates[0], coordinates[1], coordinates[2]
-                    
-                    # Machine is homed ONLY if it's at the home position (0,0,0)
-                    # Any other position means it's not homed, even if coordinates are non-zero
-                    if x == 0.0 and y == 0.0 and z == 0.0:
-                        return True
-                    else:
-                        return False
-                except (ValueError, IndexError):
-                    pass
-            
-            # Default to False if we can't determine
-            return False
 
     def wait_for_movement_completion(self, ser, cleaned_line):
         Event().wait(1)
         if cleaned_line != '$X' or '$$':
             idle_counter = 0
-            loop_count = 0
             while True:
-                loop_count += 1
                 ser.reset_input_buffer()
                 command = str.encode('?' + '\n')
                 ser.write(command)
@@ -203,8 +141,6 @@ class CNC_Controller:
                         idle_counter += 1
                 if idle_counter > 0:
                     break
-                if loop_count > 10:  # Safety timeout
-                    break
         return
 
     def move_down(self):
@@ -214,10 +150,7 @@ class CNC_Controller:
         self.gcode += "G0 Z0\n"
 
     def move_to_height(self, z):
-        if self.Z_LOW_BOUND <= z <= self.Z_HIGH_BOUND:
-            self.gcode += f"G0 Z{z}\n"
-        else:
-            print(f"Cannot move Z to {z}, coordinate not within bounds ({self.Z_LOW_BOUND} to {self.Z_HIGH_BOUND})")
+        self.gcode += f"G0 Z{z}"
 
     def move_to_point(self, x, y):
         if self.coordinates_within_bounds(x, y):
@@ -250,8 +183,6 @@ class CNC_Controller:
                 self.wait_for_movement_completion(ser, buffered_gcode)
                 grbl_out = ser.readline()
                 out_strings.append(grbl_out.strip().decode('utf-8'))
-            # Clear the G-code buffer after successful execution
-            self.gcode = ""
             return out_strings
 
 if __name__ == "__main__":

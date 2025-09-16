@@ -16,7 +16,7 @@ def load_config(config_path, model_name):
     
     with open(full_config_path, 'r') as f:
         config = yaml.safe_load(f)
-    print(f"Configuration loaded for {model_name}.") 
+ 
     return config['machines'][model_name]
 
 
@@ -80,6 +80,7 @@ class CNC_Simulator:
 
     def move_up(self):
         self.MARKER_UP = True
+
 
     def render_drawing(self):
         plt.show()
@@ -154,57 +155,74 @@ class CNC_Controller:
             return None
     
     def is_homed(self):
-        """Check if machine is homed by verifying it's at the home position"""
-        with serial.Serial(self.SERIAL_PORT_PATH, self.BAUD_RATE) as ser:
-            self.wake_up(ser)
-            ser.reset_input_buffer()
-            
-            # Check current status and coordinates
-            ser.write(b"?\n")
-            time.sleep(0.1)
-            response = ser.readline().decode().strip()
-            
-            # Machine is homed if it's at the home position (0,0,0)
-            if 'MPos:' in response:
-                try:
-                    mpos_start = response.find('MPos:') + 5
-                    mpos_end = response.find('|', mpos_start)
-                    if mpos_end == -1:
-                        mpos_end = len(response)
-                    coordinates = list(map(float, response[mpos_start:mpos_end].split(',')))
-                    x, y, z = coordinates[0], coordinates[1], coordinates[2]
-                    
-                    # Machine is homed ONLY if it's at the home position (0,0,0)
-                    # Any other position means it's not homed, even if coordinates are non-zero
-                    if x == 0.0 and y == 0.0 and z == 0.0:
-                        return True
-                    else:
+        """
+        Check if the CNC machine is homed by sending a status request
+        and checking the response for homing indicators
+        """
+        try:
+            with serial.Serial(self.SERIAL_PORT_PATH, self.BAUD_RATE, timeout=2) as ser:
+                self.wake_up(ser)
+                ser.reset_input_buffer()
+                
+                # Send status request
+                ser.write(b"?\n")
+                time.sleep(0.2)
+                
+                # Read response
+                response = ser.read_all().decode().strip()
+                
+                # Check for homing indicators in GRBL response
+                # GRBL typically shows machine state and position info
+                if response:
+                    # Look for machine state indicators
+                    # In GRBL, if machine is homed, it usually shows position info
+                    # and doesn't show alarm states related to homing
+                    if 'Alarm' in response and ('2' in response or '3' in response):
+                        # Alarm 2 or 3 typically indicate homing required
                         return False
-                except (ValueError, IndexError):
-                    pass
+                    elif 'MPos:' in response:
+                        # If we can read machine position, likely homed
+                        return True
+                    elif 'Idle' in response:
+                        # Machine is idle, probably homed
+                        return True
+                        
+        except Exception as e:
+            # If we can't communicate, assume not homed for safety
+            pass
             
             # Default to False if we can't determine
             return False
 
     def wait_for_movement_completion(self, ser, cleaned_line):
         Event().wait(1)
-        if cleaned_line != '$X' or '$$':
+        if cleaned_line != '$X' and cleaned_line != '$$':
             idle_counter = 0
             loop_count = 0
+            print(f"Waiting for movement completion of: {cleaned_line}")
             while True:
                 loop_count += 1
                 ser.reset_input_buffer()
                 command = str.encode('?' + '\n')
                 ser.write(command)
+                time.sleep(0.1)  # Small delay for response
                 grbl_out = ser.readline()
                 grbl_response = grbl_out.strip().decode('utf-8')
-                if grbl_response != 'ok':
-                    if 'Idle' in grbl_response:
-                        idle_counter += 1
-                if idle_counter > 0:
+                print(f"GRBL Response {loop_count}: {grbl_response}")
+                
+                # Look for Idle state in the response
+                if 'Idle' in grbl_response:
+                    idle_counter += 1
+                    print(f"Idle detected ({idle_counter}/2)")
+                    if idle_counter >= 2:  # Wait for 2 consecutive Idle responses
+                        print("Movement completed - machine is idle")
+                        break
+                
+                if loop_count > 30:  # Increased safety timeout
+                    print("Timeout reached - assuming movement completed")
                     break
-                if loop_count > 10:  # Safety timeout
-                    break
+                    
+                time.sleep(0.5)  # Wait between status checks
         return
 
     def move_down(self):
@@ -250,8 +268,7 @@ class CNC_Controller:
                 self.wait_for_movement_completion(ser, buffered_gcode)
                 grbl_out = ser.readline()
                 out_strings.append(grbl_out.strip().decode('utf-8'))
-            # Clear the G-code buffer after successful execution
-            self.gcode = ""
+
             return out_strings
 
 if __name__ == "__main__":
