@@ -52,10 +52,10 @@ class PlateLoader:
     LID_SERVO = 9
     
     # Servo angle limits (adjust for your hardware)
-    PLATE_DOWN_ANGLE = 0      # Well plate fully lowered
-    PLATE_UP_ANGLE = 90       # Well plate fully raised
-    LID_CLOSED_ANGLE = 0      # Lid closed position
-    LID_OPEN_ANGLE = 90       # Lid open position
+    PLATE_DOWN_ANGLE = 90     # Well plate fully lowered (90°)
+    PLATE_UP_ANGLE = 0        # Well plate fully raised (0°)
+    LID_CLOSED_ANGLE = 0      # Lid closed position (0°)
+    LID_OPEN_ANGLE = 180      # Lid fully open position (180°)
     
     # Movement parameters
     DEFAULT_MOVE_SPEED = 20   # Degrees per step
@@ -98,11 +98,11 @@ class PlateLoader:
         )
         
         # Current positions
-        self._plate_position = self.PLATE_DOWN_ANGLE
+        self._plate_position = 5  # Initialize at 5° (close to up position)
         self._lid_position = self.LID_CLOSED_ANGLE
         
         # Initialize to default positions
-        self._set_plate_servos(self.PLATE_DOWN_ANGLE)
+        self._set_plate_servos(5)  # Start at 5° (close to up)
         self.lid_servo.angle = self.LID_CLOSED_ANGLE
         
         logger.info("Plate Loader initialized successfully")
@@ -112,13 +112,15 @@ class PlateLoader:
     def _set_plate_servos(self, angle: float):
         """
         Set both plate lift servos to the same angle (synchronized movement).
+        Motor 2 is mirrored to move in the same physical direction as Motor 1.
         
         Args:
             angle: Target angle in degrees
         """
         self.plate_lift_1.angle = angle
-        self.plate_lift_2.angle = angle
+        self.plate_lift_2.angle = 90 - angle  # Mirror motor 2 (invert angle)
         self._plate_position = angle
+        logger.debug(f"Plate servos set - Motor 1 (Ch3): {angle}°, Motor 2 (Ch6): {90 - angle}°")
     
     def _move_smooth(self, current: float, target: float, 
                      set_func, speed: float = None, delay: float = None):
@@ -166,7 +168,7 @@ class PlateLoader:
         if degrees is None:
             target = self.PLATE_UP_ANGLE
         else:
-            target = min(self._plate_position + degrees, self.PLATE_UP_ANGLE)
+            target = max(self._plate_position - degrees, self.PLATE_UP_ANGLE)
         
         logger.info(f"Raising plate from {self._plate_position}° to {target}°")
         
@@ -192,7 +194,7 @@ class PlateLoader:
         if degrees is None:
             target = self.PLATE_DOWN_ANGLE
         else:
-            target = max(self._plate_position - degrees, self.PLATE_DOWN_ANGLE)
+            target = min(self._plate_position + degrees, self.PLATE_DOWN_ANGLE)
         
         logger.info(f"Lowering plate from {self._plate_position}° to {target}°")
         
@@ -206,6 +208,29 @@ class PlateLoader:
             self._set_plate_servos(target)
         
         logger.info("Plate lowered successfully")
+    
+    def pop_plate(self, smooth: bool = True):
+        """
+        Pop the plate up to -5 degrees (beyond normal up position).
+        This extends the plate further up for easier access.
+        
+        Args:
+            smooth: If True, move smoothly; if False, move directly
+        """
+        target = -5  # Pop up 5 degrees beyond normal upexit position
+        
+        logger.info(f"Popping plate from {self._plate_position}° to {target}°")
+        
+        if smooth:
+            self._move_smooth(
+                self._plate_position,
+                target,
+                self._set_plate_servos
+            )
+        else:
+            self._set_plate_servos(target)
+        
+        logger.info("Plate popped successfully")
     
     def move_plate_to(self, angle: float, smooth: bool = True):
         """
@@ -383,16 +408,35 @@ class PlateLoader:
         self.close_lid(smooth=True)
         logger.info("All servos at home position")
     
+    def release_plate_motors(self):
+        """
+        Release plate lift motors (stops PWM signals).
+        WARNING: Motors will not hold position and can be moved manually!
+        """
+        logger.info("Releasing plate motors...")
+        self.pca.channels[self.PLATE_LIFT_1].duty_cycle = 0
+        self.pca.channels[self.PLATE_LIFT_2].duty_cycle = 0
+        logger.warning("Plate motors unpowered - position not maintained!")
+    
+    def release_lid_motor(self):
+        """
+        Release lid motor (stops PWM signal).
+        WARNING: Motor will not hold position and can be moved manually!
+        """
+        logger.info("Releasing lid motor...")
+        self.pca.channels[self.LID_SERVO].duty_cycle = 0
+        logger.warning("Lid motor unpowered - position not maintained!")
+    
     def power_save_mode(self):
         """
-        Enter power save mode - stops PWM signals to servos.
+        Enter power save mode - stops PWM signals to all servos.
         WARNING: Servos will not hold position and may drift under load!
         """
         logger.info("Entering power save mode...")
         self.pca.channels[self.PLATE_LIFT_1].duty_cycle = 0
         self.pca.channels[self.PLATE_LIFT_2].duty_cycle = 0
         self.pca.channels[self.LID_SERVO].duty_cycle = 0
-        logger.warning("Servos unpowered - position not maintained!")
+        logger.warning("All servos unpowered - position not maintained!")
     
     def power_restore(self):
         """

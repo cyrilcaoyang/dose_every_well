@@ -9,19 +9,14 @@ description='Python package that use CNC for liquid handling'
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.8"
+authors = [
+    {name = "Yang Cao", email = "yangcyril.cao@utoronto.ca"}
+]
 dependencies = [
     "pyserial==3.5",
     "matplotlib==3.10.0",
     "PyYAML==6.0.2"
 ]
-
-[project.optional-dependencies]
-rpi = [
-    "adafruit-circuitpython-pca9685",
-    "adafruit-circuitpython-motor"
-]
-
-# More at https://pypi.org/classifiers/
 classifiers = [
     "Development Status :: 1 - Planning",
     "License :: MIT",
@@ -35,8 +30,10 @@ classifiers = [
     "Topic :: Software Development",
 ]
 
-authors = [
-    {name = "Yang Cao", email = "yangcyril.cao@utoronto.ca"}
+[project.optional-dependencies]
+rpi = [
+    "adafruit-circuitpython-pca9685",
+    "adafruit-circuitpython-motor"
 ]
 
 [tool.setuptools.package-dir]
