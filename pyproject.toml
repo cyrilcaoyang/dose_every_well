@@ -15,6 +15,12 @@ dependencies = [
     "PyYAML==6.0.2"
 ]
 
+[project.optional-dependencies]
+rpi = [
+    "adafruit-circuitpython-pca9685",
+    "adafruit-circuitpython-motor"
+]
+
 # More at https://pypi.org/classifiers/
 classifiers = [
     "Development Status :: 1 - Planning",
