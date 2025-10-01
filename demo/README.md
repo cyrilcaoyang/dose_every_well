@@ -1,6 +1,6 @@
-# Liquid CNC Demo Scripts
+# Dose Every Well Demo Scripts
 
-This folder contains demo scripts for testing the liquid_cnc driver and demonstrating axis movement capabilities.
+This folder contains demo scripts for testing the dose_every_well driver and demonstrating axis movement capabilities.
 
 ## Files
 
@@ -25,25 +25,55 @@ The demo scripts will:
 1. **Virtual environment activated**: Make sure you're using the `venv` (not conda)
 2. **Dependencies installed**: Run `pip install -e .` from the project root
 3. **CNC machine connected**: Ensure your CNC is powered on and connected via USB
-4. **Configuration file**: Verify `src/liquid_cnc/cnc_settings.yaml` exists and is correct
+4. **Configuration file**: Verify `src/dose_every_well/cnc_settings.yaml` exists and is correct
 
 ## Running the Demo
 
 ### Option 1: Interactive Demo (Recommended for first run)
+
+**Unix/Linux/Mac/Raspberry Pi:**
 ```bash
 # From the project root directory
 python demo/axis_movement_demo.py
 ```
 
+**Windows:**
+```bash
+# From the project root directory
+python demo\axis_movement_demo.py
+```
+
 This version will pause before Z-axis movements for safety confirmation.
 
 ### Option 2: Automated Demo
+
+**Unix/Linux/Mac/Raspberry Pi:**
 ```bash
 # From the project root directory
 python demo/axis_movement_demo_auto.py
 ```
 
+**Windows:**
+```bash
+# From the project root directory
+python demo\axis_movement_demo_auto.py
+```
+
 This version runs completely automatically without user input.
+
+### Option 3: Simple Connection Test
+
+**Unix/Linux/Mac/Raspberry Pi:**
+```bash
+python demo/simple_connect_demo.py
+```
+
+**Windows:**
+```bash
+python demo\simple_connect_demo.py
+```
+
+This version just connects and reads coordinates (no movement).
 
 ## Safety Notes
 
@@ -85,23 +115,36 @@ After X-axis movement - Current coordinates: X=10.00, Y=0.00, Z=0.00
 ### Common Issues
 
 1. **"No serial ports found"**
-   - Check USB connection
-   - Verify CNC is powered on
-   - Check device manager for COM port
+   - **Windows**: Check Device Manager → Ports (COM & LPT)
+   - **Linux/Pi**: Run `ls /dev/ttyUSB* /dev/ttyACM*` to list available ports
+   - **All platforms**: Check USB connection and verify CNC is powered on
 
-2. **"Configuration loaded for Genmitsu 4040 PRO"**
+2. **Permission denied (Linux/Raspberry Pi)**
+   ```bash
+   # Add your user to the dialout group
+   sudo usermod -a -G dialout $USER
+   # Log out and back in for the change to take effect
+   ```
+
+3. **"Configuration loaded for Genmitsu 4040 PRO"**
    - Verify machine name matches your config file
    - Check YAML syntax in `cnc_settings.yaml`
 
-3. **Import errors**
+4. **Import errors**
    - Ensure virtual environment is activated
+     - Unix/Mac: `source .venv/bin/activate`
+     - Windows: `.venv\Scripts\activate`
    - Run `pip install -e .` from project root
    - Check Python path includes `src` directory
 
-4. **Movement errors**
+5. **Movement errors**
    - Verify machine is homed
    - Check coordinate boundaries in config
    - Ensure tool is clear of obstacles
+
+6. **Raspberry Pi specific**
+   - If matplotlib is slow, set: `export MPLBACKEND=Agg`
+   - Ensure you have enough free memory (close other apps)
 
 ## Customization
 

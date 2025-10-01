@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Simple demo to connect to 4040-PRO on COM5 and print XYZ coordinates."""
+"""Simple demo to connect to 4040-PRO and print XYZ coordinates."""
 
 import sys
 import os
 
-# Add the src directory to the Python path so we can import liquid_cnc
+# Add the src directory to the Python path so we can import dose_every_well
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from liquid_cnc import CNC_Controller, load_config
+from dose_every_well import CNC_Controller, load_config, find_port
 
 
 def main():
-    """Connect to 4040-PRO on COM5 and print coordinates"""
+    """Connect to 4040-PRO and print coordinates"""
     print("=== Simple 4040-PRO Connection Demo ===")
     
     try:
@@ -19,8 +19,8 @@ def main():
         config = load_config("cnc_settings.yaml", 'Genmitsu 4040 PRO')
         print("Configuration loaded successfully!")
         
-        # Connect directly to COM5
-        port = "COM5"
+        # Auto-detect CNC port (works on Windows, Linux, macOS)
+        port = find_port()
         print(f"Connecting to {port}...")
         
         controller = CNC_Controller(port, config)

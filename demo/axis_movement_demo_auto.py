@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Automated demo script for liquid_cnc axis movement testing."""
+"""Automated demo script for dose_every_well axis movement testing."""
 
 import sys
 import os
 import time
 
-# Add the src directory to the Python path so we can import liquid_cnc
+# Add the src directory to the Python path so we can import dose_every_well
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from liquid_cnc.cnc_controller import CNC_Controller, load_config, find_port
+from dose_every_well.cnc_controller import CNC_Controller, load_config, find_port
 
 
 def main():

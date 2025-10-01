@@ -187,7 +187,7 @@ class CNC_Controller:
 
 if __name__ == "__main__":
     """
-    Example usage of the liquid_cnc module.
+    Example usage of the dose_every_well module.
     """
     #config = load_config("cnc_settings.yaml", 'Genmitsu 3018-PROVer V2')
     config = load_config("cnc_settings.yaml", 'Genmitsu 4040 PRO')
