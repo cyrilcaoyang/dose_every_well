@@ -383,6 +383,27 @@ class PlateLoader:
         self.close_lid(smooth=True)
         logger.info("All servos at home position")
     
+    def power_save_mode(self):
+        """
+        Enter power save mode - stops PWM signals to servos.
+        WARNING: Servos will not hold position and may drift under load!
+        """
+        logger.info("Entering power save mode...")
+        self.pca.channels[self.PLATE_LIFT_1].duty_cycle = 0
+        self.pca.channels[self.PLATE_LIFT_2].duty_cycle = 0
+        self.pca.channels[self.LID_SERVO].duty_cycle = 0
+        logger.warning("Servos unpowered - position not maintained!")
+    
+    def power_restore(self):
+        """
+        Restore power to servos at last known positions.
+        Re-applies the last commanded positions.
+        """
+        logger.info("Restoring servo power...")
+        self._set_plate_servos(self._plate_position)
+        self.lid_servo.angle = self._lid_position
+        logger.info(f"Servos restored: Plate={self._plate_position}°, Lid={self._lid_position}°")
+    
     def shutdown(self):
         """
         Safely shutdown the controller.
