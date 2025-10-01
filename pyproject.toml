@@ -12,7 +12,8 @@ requires-python = ">=3.8"
 dependencies = [
     "pyserial==3.5",
     "matplotlib==3.10.0",
-    "PyYAML==6.0.2"
+    "PyYAML==6.0.2",
+    "matterlab-balances==0.1.0"
 ]
 
 # More at https://pypi.org/classifiers/

@@ -18,6 +18,8 @@ px, py = pos["pitch"]["x"], pos["pitch"]["y"]
 rows, cols = int(pos["rows"]), int(pos["cols"])
 z_travel, z_approach = pos["z"]["travel"], pos["z"]["approach"]
 if __name__ == "__main__":
+
+    
     # Load CNC configuration and find port
     config = load_config ("cnc_settings.yaml", "Genmitsu 4040 PRO")
     port = find_port()

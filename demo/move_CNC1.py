@@ -8,11 +8,27 @@ Drafted with Cursor code writer
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
+import serial
+import signal
 from liquid_cnc import load_config, CNC_Controller
 import time
 
+# Global variable to store arduino connection for cleanup
+arduino_connection = None
 
+def cleanup_and_exit(signum, frame):
+    """Clean up Arduino connection when Ctrl+C is pressed"""
+    global arduino_connection
+    print("\n\nCtrl+C detected. Cleaning up...")
+    try:
+        if arduino_connection and arduino_connection.is_open:
+            arduino_connection.close()
+            print("Arduino connection closed safely")
+    except:
+        pass  # Ignore cleanup errors
+    print("Exiting...")
+    os._exit(0)  # Force exit
+ 
 def move_cnc(target_x, target_y, target_z, controller):
 
     # Move X and Y together (XY plane)
@@ -21,7 +37,7 @@ def move_cnc(target_x, target_y, target_z, controller):
     controller.move_to_point(target_x, target_y)
     controller.execute_movement()
 
-    time.sleep(2)
+    time.sleep(5)
     print("XY movement completed")
     
     # Verify XY position before Z movement
@@ -100,23 +116,25 @@ def get_well_dict(num_rows, num_cols, A1_x, A1_y, dx, dy):
     for num in range(num_cols):
         # actual location coordinates are computed with the raw index
         # this is intentionally flipped due to the particular setup
-        well_y = A1_x + (num)*dx
+        well_y = A1_y + (num)*dx
 
         for i_lett in range(num_rows):
             # actual location coordinates are computed with the raw index
             # this is intentionally flipped due to the particular setup
-            well_x = A1_y + (i_lett)*dy
+            well_x = A1_x + (i_lett)*dy
 
             lett = letters[i_lett]
             # add 1 to the displayed well name
             well_dict[f"{lett}{num+1}"] = [well_x, well_y]
+    print(well_dict)
 
     return well_dict
+
 def main():
 
     print("=== CNC Machine Movement Script ===")
 
-    # eventual goals:
+    # goals:
     # 1. Move to A1 on the wellplate
     # 2. Move down and wait for input
     # 3. Move up, then move to B1
@@ -125,28 +143,45 @@ def main():
     # and also number of wells (n rows and n cols)
 
     # Initial coordinates
-    A1_x = 200
-    A1_y = 200
-    plate_z = -10 # top of Z axis is 0
-    plate_dz = -10
+    A1_x = 85.2
+    A1_y = 296.8
+    plate_z = -64 # top of Z axis is 0
+    plate_dz = -3
 
-    dx = -15
-    dy = -10
+    dx = -20
+    dy = -20
 
-    num_rows = 4
-    num_cols = 6
+    num_rows = 3
+    num_cols = 3
     well_dict = get_well_dict(num_rows, num_cols, A1_x, A1_y, dx, dy)
     print(f"A1 location: X={A1_x}, Y={A1_y}, Z={plate_z}")
+    # Register signal handler for Ctrl+C (disabled for debugging)
+    signal.signal(signal.SIGINT, cleanup_and_exit)
+    
     try:
         # Load configuration
         config = load_config("cnc_settings.yaml", 'Genmitsu 4040 PRO')
         print("Configuration loaded successfully!")
         
         # Connect to CNC
-        port = "COM5"
+        port = "COM14"
         print(f"Connecting to {port}...")
         controller = CNC_Controller(port, config)
         print(f"Connected to CNC on {port}")
+
+        # connect to arduino
+        arduino = serial.Serial('COM10', 9600, timeout=2)
+        arduino_connection = arduino  # Store globally for cleanup
+        
+        # Wait for Arduino to initialize (critical!)
+        time.sleep(2)
+        print("Arduino ready")
+        
+        # set up params
+        for command in ["rev angle 0", "angle 360", "tpr 2"]:
+            arduino.write(command.encode('utf-8'))
+            print(f"Sent command: {command}")
+            time.sleep(0.1)
         
         # Check if machine is homed
         print("\n--- Machine Status Check ---")
@@ -191,7 +226,10 @@ def main():
             print("Repeat code with updated A1 coordinates")
             
             return
-
+        command = "run"
+        arduino.write(command.encode('utf-8'))
+        time.sleep(2)
+        print("attempting dispense")
         response = input("Press enter after dispense is complete")
 
         controller.gcode = ""  # Clear previous G-code
@@ -205,6 +243,7 @@ def main():
             # move to the well's xy. Z should be the same
             controller.gcode = ""  # Clear any previous G-code
             controller.move_to_point(well_dict[well][0], well_dict[well][1])
+            print(well_dict[well][0], well_dict[well][1])
             controller.execute_movement()
 
             # move_cnc(well_dict[well][0], well_dict[well][1], plate_z, controller)
@@ -213,22 +252,20 @@ def main():
             controller.move_to_height(plate_z+plate_dz)
             controller.execute_movement()
 
+            command = "run"
+            arduino.write(command.encode('utf-8'))
+
             response = input("Press enter after dispense is complete")
             controller.gcode = ""  # Clear previous G-code
             controller.move_to_height(plate_z)
             controller.execute_movement()
+
+
+            # Always close the connection if it was opened
+        if arduino and arduino.is_open:
+            arduino.close()
+            print("Serial connection closed")
             
-
-
-
-
-        
-
-
-
-
-
-        
 
     except Exception as e:
         print(f"Error during movement: {e}")

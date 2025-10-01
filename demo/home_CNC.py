@@ -22,7 +22,7 @@ def main():
         
         # Connect to COM5
         # This is hardcoded for now but subject to change
-        port = "COM5"
+        port = "COM14"
         print(f"Connecting to {port}...")
         
         controller = CNC_Controller(port, config)
