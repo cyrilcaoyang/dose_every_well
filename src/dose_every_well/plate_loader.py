@@ -53,9 +53,9 @@ class PlateLoader:
     
     # Servo angle limits (adjust for your hardware)
     PLATE_DOWN_ANGLE = 90     # Well plate fully lowered (90°)
-    PLATE_UP_ANGLE = 0        # Well plate fully raised (0°)
-    LID_CLOSED_ANGLE = 0      # Lid closed position (0°)
-    LID_OPEN_ANGLE = 180      # Lid fully open position (180°)
+    PLATE_UP_ANGLE = -90      # Well plate fully raised (-90°)
+    LID_CLOSED_ANGLE = 178    # Lid closed position (178°)
+    LID_OPEN_ANGLE = 30       # Lid fully open position (30°)
     
     # Movement parameters
     DEFAULT_MOVE_SPEED = 20   # Degrees per step
@@ -78,7 +78,7 @@ class PlateLoader:
         self.pca = PCA9685(self.i2c, address=i2c_address)
         self.pca.frequency = frequency
         
-        # Initialize servos
+        # Initialize servos (using standard 0-180° range, we translate in software)
         self.plate_lift_1 = servo.Servo(
             self.pca.channels[self.PLATE_LIFT_1],
             min_pulse=500,
@@ -97,17 +97,29 @@ class PlateLoader:
             max_pulse=2500
         )
         
-        # Current positions
-        self._plate_position = 5  # Initialize at 5° (close to up position)
-        self._lid_position = self.LID_CLOSED_ANGLE
+        # Initialization sequence
+        logger.info("Starting initialization sequence...")
         
-        # Initialize to default positions
-        self._set_plate_servos(5)  # Start at 5° (close to up)
-        self.lid_servo.angle = self.LID_CLOSED_ANGLE
+        # Step 1: Retract plate to down position
+        logger.info("Step 1: Retracting plate to down position...")
+        self._plate_position = self.PLATE_DOWN_ANGLE
+        self._set_plate_servos(self.PLATE_DOWN_ANGLE)  # Move to 90° (down)
+        time.sleep(1)
+        
+        # Step 2: Open lid
+        logger.info(f"Step 2: Opening lid to {self.LID_OPEN_ANGLE}°...")
+        self.lid_servo.angle = self.LID_OPEN_ANGLE  # Open to 30°
+        self._lid_position = self.LID_OPEN_ANGLE
+        time.sleep(2)
+        
+        # Step 3: Move plate to up position
+        logger.info(f"Step 3: Moving plate to up position ({self.PLATE_UP_ANGLE}°)...")
+        self._set_plate_servos(self.PLATE_UP_ANGLE)  # Move to -90° (up)
+        self._plate_position = self.PLATE_UP_ANGLE
         
         logger.info("Plate Loader initialized successfully")
         logger.info(f"  Plate lift servos: channels {self.PLATE_LIFT_1}, {self.PLATE_LIFT_2}")
-        logger.info(f"  Lid servo: channel {self.LID_SERVO}")
+        logger.info(f"  Lid servo: channel {self.LID_SERVO} at {self.LID_OPEN_ANGLE}°")
     
     def _set_plate_servos(self, angle: float):
         """
@@ -115,12 +127,16 @@ class PlateLoader:
         Motor 2 is mirrored to move in the same physical direction as Motor 1.
         
         Args:
-            angle: Target angle in degrees
+            angle: Target angle in degrees (-90 to 90 logical range)
         """
-        self.plate_lift_1.angle = angle
-        self.plate_lift_2.angle = 90 - angle  # Mirror motor 2 (invert angle)
+        # Translate logical angle (-90 to 90) to servo angle (0 to 180)
+        servo1_angle = angle + 90  # -90→0, 0→90, 90→180
+        servo2_angle = 90 - angle  # -90→180, 0→90, 90→0 (mirrored)
+        
+        self.plate_lift_1.angle = servo1_angle
+        self.plate_lift_2.angle = servo2_angle
         self._plate_position = angle
-        logger.debug(f"Plate servos set - Motor 1 (Ch3): {angle}°, Motor 2 (Ch6): {90 - angle}°")
+        logger.debug(f"Plate servos set - Motor 1 (Ch3): {servo1_angle}° (logical: {angle}°), Motor 2 (Ch6): {servo2_angle}° (mirrored)")
     
     def _move_smooth(self, current: float, target: float, 
                      set_func, speed: float = None, delay: float = None):
