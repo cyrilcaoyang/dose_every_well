@@ -10,6 +10,7 @@ A Python package for precise control of CNC machines designed for laboratory aut
 
 ## Features
 
+### CNC Control
 - 🎯 Precise G-code control of CNC machines via serial communication
 - 🔌 Automatic serial port detection across all platforms
 - 🔧 Pre-configured for Genmitsu 3018-PROVer V2 and 4040 PRO
@@ -17,6 +18,12 @@ A Python package for precise control of CNC machines designed for laboratory aut
 - 🌐 Cross-platform: Windows, Linux, Raspberry Pi, and macOS
 - 🛡️ Safety boundaries to prevent collisions
 - ⚙️ YAML-based configuration for easy machine setup
+
+### Raspberry Pi Hardware Support
+- 🤖 **Motorized Plate Loader** - Automated well plate loading with synchronized servo lift and lid control
+- 💊 **Solid Powder Doser** - Precise solid material dispensing with servo gate and DC motor auger
+- ⚡ **Power-Safe Operation** - Sequential control designed for 5V 5A single-supply operation
+- 🔌 **Waveshare PCA9685 HAT** - I2C servo control with relay-based motor switching
 
 ## Quick Start
 
@@ -49,11 +56,13 @@ controller.execute_movement()
 ### Run Demos
 
 ```bash
-# Simple connection test
+# CNC control demos
 python demo/simple_connect_demo.py
-
-# Interactive movement demo
 python demo/axis_movement_demo.py
+
+# Raspberry Pi hardware demos (requires hardware)
+python demo/plate_loader_demo.py
+python demo/solid_doser_demo.py
 ```
 
 ## Platform Support
@@ -69,18 +78,37 @@ python demo/axis_movement_demo.py
 
 📚 **[Complete Documentation](docs/)**
 
+### General
 - **[Installation Guide](docs/installation.md)** - Platform-specific setup instructions
 - **[Quick Start Guide](docs/quick_start.md)** - Get running in 5 minutes
 - **[API Reference](docs/api_reference.md)** - Complete API documentation
-- **[Platform Notes](docs/platform_notes.md)** - Platform-specific details
 - **[Troubleshooting](docs/troubleshooting.md)** - Solutions to common issues
-- **[Changelog](docs/changelog.md)** - Version history and migration guide
+
+### Raspberry Pi Hardware
+- **[Wiring Guide](docs/wiring_guide.md)** 🔌 - Complete hardware setup with diagrams
+- **[Plate Loader Guide](docs/plate_loader.md)** - Motorized plate loader documentation
+- **[Solid Doser Guide](docs/solid_doser.md)** - Solid powder dosing documentation
+- **[Servo Power Guide](docs/servo_power_guide.md)** - Power management and optimization
 
 ## Supported Hardware
 
+### CNC Machines
 - **Genmitsu 4040 PRO** (400×400×75mm work area)
 - **Genmitsu 3018-PROVer V2** (300×180×45mm work area)
 - Any GRBL-compatible CNC machine (requires custom configuration)
+
+### Raspberry Pi Hardware (Optional)
+**Complete system for automated solid/liquid dispensing:**
+
+| Component | Purpose | Channels |
+|-----------|---------|----------|
+| **Waveshare PCA9685 HAT** | I2C servo driver (0x40) | 16 channels |
+| **4× Servo Motors** | Gate, lifts, lid control | Ch 0, 3, 6, 9 |
+| **5V Relay Module** | DC motor ON/OFF | GPIO 17 |
+| **DC Motor** | Auger/screw feeder | Via relay |
+| **5V 5A Power Supply** | Single plug powers all | USB-C + distribution |
+
+📖 **See [Wiring Guide](docs/wiring_guide.md) for complete setup instructions**
 
 ## Testing
 
@@ -94,23 +122,25 @@ python test_platform.py
 
 ```
 dose_every_well/
-├── src/dose_every_well/      # Main package
-│   ├── cnc_controller.py     # Core controller
-│   ├── cnc_settings.yaml     # Machine configs
+├── src/dose_every_well/       # Main package
+│   ├── cnc_controller.py      # Core CNC controller
+│   ├── plate_loader.py        # Raspberry Pi plate loader (3 servos)
+│   ├── solid_doser.py         # Raspberry Pi solid doser (servo + motor)
+│   ├── cnc_settings.yaml      # Machine configs
 │   └── __init__.py
-├── demo/                      # Example scripts
+├── demo/                       # Example scripts
 │   ├── simple_connect_demo.py
 │   ├── axis_movement_demo.py
-│   └── axis_movement_demo_auto.py
-├── docs/                      # Documentation
+│   ├── plate_loader_demo.py
+│   └── solid_doser_demo.py
+├── docs/                       # Documentation
+│   ├── wiring_guide.md        # 🔌 Hardware setup (START HERE!)
+│   ├── solid_doser.md
+│   ├── plate_loader.md
 │   ├── installation.md
-│   ├── quick_start.md
-│   ├── api_reference.md
-│   ├── platform_notes.md
-│   ├── troubleshooting.md
-│   └── changelog.md
-├── test_platform.py          # Platform compatibility test
-└── README.md                 # This file
+│   └── troubleshooting.md
+├── test_platform.py           # Platform compatibility test
+└── README.md                  # This file
 ```
 
 ## Safety
@@ -123,7 +153,9 @@ dose_every_well/
 - Clear work area before automated runs
 - Monitor Z-axis movements to prevent crashes
 
-## Example: Dispense to 96-Well Plate
+## Usage Examples
+
+### Example 1: CNC-Only Liquid Dispensing
 
 ```python
 from dose_every_well import CNC_Controller, load_config, find_port
@@ -148,6 +180,73 @@ for row in range(8):  # A-H
         controller.execute_movement()
         
         print(f"Dispensing to well {chr(65+row)}{col+1}")
+```
+
+### Example 2: Complete Solid Dosing Workflow (Raspberry Pi)
+
+```python
+from dose_every_well import CNC_Controller, PlateLoader, SolidDoser, load_config, find_port
+import time
+
+# Initialize all controllers
+cnc = CNC_Controller(find_port(), load_config("cnc_settings.yaml", "Genmitsu 4040 PRO"))
+plate_loader = PlateLoader(i2c_address=0x40)
+solid_doser = SolidDoser(i2c_address=0x40, motor_gpio_pin=17)
+
+try:
+    # 1. Load plate onto balance
+    print("Loading plate...")
+    plate_loader.load_sequence()
+    
+    # 2. Dispense solid into each well
+    well_spacing = 9.0  # mm
+    start_x, start_y = 10.0, 10.0
+    
+    for row in range(8):
+        for col in range(12):
+            well = f"{chr(65+row)}{col+1}"
+            print(f"Dispensing to well {well}...")
+            
+            # Move CNC to well position
+            x = start_x + col * well_spacing
+            y = start_y + row * well_spacing
+            cnc.move_to_point(x, y)
+            cnc.move_to_height(5.0)
+            cnc.execute_movement()
+            
+            # Dispense solid material (motor + gate servo)
+            solid_doser.dispense(duration=2.0)
+            
+            # Move up
+            cnc.move_to_height(20.0)
+            cnc.execute_movement()
+    
+    # 3. Unload plate
+    print("Unloading plate...")
+    plate_loader.unload_sequence()
+    
+finally:
+    solid_doser.shutdown()
+    plate_loader.shutdown()
+    cnc.disconnect()
+```
+
+### Example 3: Solid Doser Only (No CNC)
+
+```python
+from dose_every_well import SolidDoser
+
+doser = SolidDoser(i2c_address=0x40, motor_gpio_pin=17)
+
+try:
+    # Simple dispense for 5 seconds
+    doser.dispense(duration=5.0)
+    
+    # Precise low-flow dispense (30° gate opening)
+    doser.dispense(duration=3.0, gate_angle=30)
+    
+finally:
+    doser.shutdown()
 ```
 
 ## Contributing
