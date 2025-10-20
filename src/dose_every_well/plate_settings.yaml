@@ -1,0 +1,85 @@
+# ============================================================================
+# Plate Loader Configuration
+# ============================================================================
+# 
+# This file contains all settings for the motorized plate loader.
+# You can customize these values to match your hardware setup and plate types.
+#
+# HOW TO USE:
+# 1. Edit values as needed for your hardware
+# 2. Add custom collision profiles for different plate types
+# 3. Changes take effect on next PlateLoader initialization
+# 4. Use loader.reload_config() to reload without restarting
+#
+# IMPORTANT - EXPLICIT PLATE TYPE REQUIRED:
+# You MUST explicitly specify a plate_type when initializing PlateLoader.
+# Example: PlateLoader(plate_type='shallow_plate')
+# This is a safety feature to prevent unintended collisions.
+#
+# SAFETY NOTE:
+# Collision avoidance prevents lid-plate crashes. Test carefully when
+# creating custom profiles or disabling collision avoidance.
+# ============================================================================
+
+# Servo channel assignments on PCA9685
+servo_channels:
+  plate_lift_1: 3      # First plate lift servo
+  plate_lift_2: 6      # Second plate lift servo (synchronized, mirrored)
+  lid_servo: 9         # Lid open/close servo
+
+# Servo angle limits (adjust for your hardware)
+servo_limits:
+  plate_down_angle: 90     # Well plate fully lowered (90°)
+  plate_up_angle: -90      # Well plate fully raised (-90°)
+  lid_closed_angle: 178    # Lid closed position (178°)
+  lid_open_angle: 30       # Lid fully open position (30°)
+
+# Movement parameters
+movement:
+  default_move_speed: 20    # Degrees per step for smooth movements
+  default_move_delay: 0.05  # Seconds between steps
+
+# Plate types with collision avoidance settings
+# ============================================================================
+# Each plate type defines safety limits to prevent lid-plate collision.
+#
+# RULES:
+# - When plate < plate_safe_angle (raised), lid cannot move > lid_safe_angle
+# - When lid > lid_safe_angle (more closed), plate cannot move < plate_safe_angle
+#
+# CUSTOMIZATION:
+# - Test new plate types carefully by moving step-by-step
+# - Use loader.print_collision_info() to check current state
+# - Set both values to null to disable collision checking
+# ============================================================================
+plate_types:
+  shallow_plate:
+    description: "Standard shallow well plate (e.g., 96-well)"
+    plate_safe_angle: 50    # Plate must be >= 50° when lid > 40°
+    lid_safe_angle: 40      # Lid must be <= 40° when plate < 50°
+    
+  deep_well:
+    description: "Deep well plate with extra clearance"
+    plate_safe_angle: 30    # Deep wells allow more clearance - plate only needs to be >= 30°
+    lid_safe_angle: 60      # Can close lid more (up to 60°) with deep wells
+    
+  custom_384_well:
+    description: "Custom 384-well plate profile (example)"
+    plate_safe_angle: 45    # Adjust based on your 384-well plate height
+    lid_safe_angle: 35      # More conservative than shallow_plate
+    
+  disabled:
+    description: "No collision avoidance (use with caution!)"
+    plate_safe_angle: null  # null disables collision checking
+    lid_safe_angle: null    # WARNING: No safety checks will be performed!
+
+# PWM controller settings
+pwm_controller:
+  i2c_address: 0x40  # I2C address of PCA9685
+  frequency: 50       # PWM frequency in Hz (standard for servos)
+  
+# Servo PWM pulse width settings (microseconds)
+servo_pulse_width:
+  min_pulse: 500      # Minimum pulse width (μs)
+  max_pulse: 2500     # Maximum pulse width (μs)
+

@@ -11,19 +11,20 @@ A Python package for precise control of CNC machines designed for laboratory aut
 ## Features
 
 ### CNC Control
-- 🎯 Precise G-code control of CNC machines via serial communication
-- 🔌 Automatic serial port detection across all platforms
-- 🔧 Pre-configured for Genmitsu 3018-PROVer V2 and 4040 PRO
-- 📊 Built-in simulator for testing movements before execution
-- 🌐 Cross-platform: Windows, Linux, Raspberry Pi, and macOS
-- 🛡️ Safety boundaries to prevent collisions
-- ⚙️ YAML-based configuration for easy machine setup
+- Precise G-code control of CNC machines via serial communication
+- Automatic serial port detection across all platforms
+- Pre-configured for Genmitsu 3018-PROVer V2 and 4040 PRO
+- Built-in simulator for testing movements before execution
+- Cross-platform: Windows, Linux, Raspberry Pi, and macOS
+- Safety boundaries to prevent collisions
+- YAML-based configuration for easy machine setup
+- Motorized plate loader with collision avoidance for different plate types
 
 ### Raspberry Pi Hardware Support
-- 🤖 **Motorized Plate Loader** - Automated well plate loading with synchronized servo lift and lid control
-- 💊 **Solid Powder Doser** - Precise solid material dispensing with servo gate and DC motor auger
-- ⚡ **Power-Safe Operation** - Sequential control designed for 5V 5A single-supply operation
-- 🔌 **Waveshare PCA9685 HAT** - I2C servo control with relay-based motor switching
+- **Motorized Plate Loader** - Automated well plate loading with synchronized servo lift and lid control
+- **Solid Powder Doser** - Precise solid material dispensing with servo gate and DC motor auger
+- **Power-Safe Operation** - Sequential control designed for 5V 5A single-supply operation
+- **Waveshare PCA9685 HAT** - I2C servo control with relay-based motor switching
 
 ## Quick Start
 
@@ -69,14 +70,14 @@ python demo/solid_doser_demo.py
 
 | Platform | Status | Notes |
 |----------|--------|-------|
-| Windows 7/10/11 | ✅ | Works out of box |
-| Linux (Ubuntu/Debian) | ✅ | Requires dialout group |
-| Raspberry Pi 3/4/5 | ✅ | Tested on Pi 5 |
-| macOS (Intel/M1/M2) | ✅ | Full support |
+| Windows 7/10/11 | Supported | Works out of box |
+| Linux (Ubuntu/Debian) | Supported | Requires dialout group |
+| Raspberry Pi 3/4/5 | Supported | Tested on Pi 5 |
+| macOS (Intel/M1/M2) | Supported | Full support |
 
 ## Documentation
 
-📚 **[Complete Documentation](docs/)**
+**[Complete Documentation](docs/)**
 
 ### General
 - **[Installation Guide](docs/installation.md)** - Platform-specific setup instructions
@@ -85,7 +86,7 @@ python demo/solid_doser_demo.py
 - **[Troubleshooting](docs/troubleshooting.md)** - Solutions to common issues
 
 ### Raspberry Pi Hardware
-- **[Wiring Guide](docs/wiring_guide.md)** 🔌 - Complete hardware setup with diagrams
+- **[Wiring Guide](docs/wiring_guide.md)** - Complete hardware setup with diagrams
 - **[Plate Loader Guide](docs/plate_loader.md)** - Motorized plate loader documentation
 - **[Solid Doser Guide](docs/solid_doser.md)** - Solid powder dosing documentation
 - **[Servo Power Guide](docs/servo_power_guide.md)** - Power management and optimization
@@ -108,7 +109,36 @@ python demo/solid_doser_demo.py
 | **DC Motor** | Auger/screw feeder | Via relay |
 | **5V 5A Power Supply** | Single plug powers all | USB-C + distribution |
 
-📖 **See [Wiring Guide](docs/wiring_guide.md) for complete setup instructions**
+**See [Wiring Guide](docs/wiring_guide.md) for complete setup instructions**
+
+### Plate Loader (Raspberry Pi)
+
+Motorized plate loader with automatic collision avoidance for safe operation with different plate types:
+
+```python
+from dose_every_well import PlateLoader
+
+# Specify plate type for automatic safety settings
+loader = PlateLoader(plate_type='shallow_plate')  # 96-well plates
+loader = PlateLoader(plate_type='deep_well')      # Deep-well plates
+
+# Operate safely with collision avoidance
+loader.open_lid()
+loader.raise_plate()
+loader.close_lid()  # Auto-blocked if plate position would cause collision
+
+# Switch plate types on the fly
+loader.set_plate_type('custom_384_well')
+loader.reload_config()  # Reload settings from plate_settings.yaml
+```
+
+**Features:**
+- **Collision Avoidance** - Prevents lid-plate crashes based on plate type
+- **YAML Configuration** - Customize plate types in `plate_settings.yaml`
+- **Hot-Reload** - Update settings without restarting
+- **Multiple Plate Types** - Pre-configured for shallow, deep-well, and custom plates
+
+Requires Raspberry Pi with PCA9685 PWM HAT and servos. See `plate_settings.yaml` for configuration.
 
 ## Testing
 
@@ -126,7 +156,8 @@ dose_every_well/
 │   ├── cnc_controller.py      # Core CNC controller
 │   ├── plate_loader.py        # Raspberry Pi plate loader (3 servos)
 │   ├── solid_doser.py         # Raspberry Pi solid doser (servo + motor)
-│   ├── cnc_settings.yaml      # Machine configs
+│   ├── cnc_settings.yaml      # CNC machine configs
+│   ├── plate_settings.yaml    # Plate loader configs
 │   └── __init__.py
 ├── demo/                       # Example scripts
 │   ├── simple_connect_demo.py
@@ -134,7 +165,7 @@ dose_every_well/
 │   ├── plate_loader_demo.py
 │   └── solid_doser_demo.py
 ├── docs/                       # Documentation
-│   ├── wiring_guide.md        # 🔌 Hardware setup (START HERE!)
+│   ├── wiring_guide.md        # Hardware setup (START HERE!)
 │   ├── solid_doser.md
 │   ├── plate_loader.md
 │   ├── installation.md
@@ -145,7 +176,7 @@ dose_every_well/
 
 ## Safety
 
-⚠️ **Important Safety Practices:**
+**Important Safety Practices:**
 
 - Test in simulation before hardware execution
 - Verify movement boundaries match your machine
