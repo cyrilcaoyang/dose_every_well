@@ -23,8 +23,7 @@ from typing import Optional
 try:
     from adafruit_pca9685 import PCA9685
     from adafruit_motor import servo
-    import board
-    import busio
+    import board, busio
     import RPi.GPIO as GPIO
 except ImportError as e:
     print("Required libraries not installed. On Raspberry Pi, run:")
@@ -61,9 +60,19 @@ class SolidDoser:
     # GPIO pin for relay control
     MOTOR_RELAY_PIN = 17  # BCM GPIO 17 (Physical Pin 11)
     
-    # Servo angle limits
-    GATE_CLOSED_ANGLE = 0      # Gate fully closed
-    GATE_OPEN_ANGLE = 90       # Gate fully open
+    # Relay trigger type
+    LOW_LEVEL_TRIGGER = True  # True = LOW turns relay ON, False = HIGH turns relay ON
+    
+    # Servo physical angle limits (servo library angles)
+    SERVO_FULLY_EXTENDED = 30   # Pin fully extended (pushed out)
+    SERVO_CONTACT_POINT = 65    # Pin makes contact with gate
+    SERVO_FULLY_CONTRACTED = 85 # Pin fully contracted (pulled back)
+    
+    # User-friendly gate position coordinates
+    # 0 = contact point, negative = contracted, positive = extended
+    GATE_MAX_EXTENSION = 35     # Maximum extension from contact (servo 30°)
+    GATE_CONTACT = 0            # Pin touching gate (servo 65°)
+    GATE_MAX_CONTRACTION = -20  # Maximum contraction from contact (servo 85°)
     
     # Power management delays
     MOTOR_STARTUP_DELAY = 0.5  # Wait for motor to reach steady state
@@ -87,7 +96,9 @@ class SolidDoser:
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
         GPIO.setup(self.MOTOR_RELAY_PIN, GPIO.OUT)
-        GPIO.output(self.MOTOR_RELAY_PIN, GPIO.LOW)  # Start with motor OFF
+        # Start with motor OFF (depends on relay trigger type)
+        initial_state = GPIO.HIGH if self.LOW_LEVEL_TRIGGER else GPIO.LOW
+        GPIO.output(self.MOTOR_RELAY_PIN, initial_state)
         
         # Initialize I2C bus
         self.i2c = busio.I2C(board.SCL, board.SDA)
@@ -103,8 +114,8 @@ class SolidDoser:
             max_pulse=2500
         )
         
-        # Current positions/states
-        self._gate_position = self.GATE_CLOSED_ANGLE
+        # Current positions/states (in user coordinates)
+        self._gate_position = self.GATE_MAX_CONTRACTION  # Start contracted (closed)
         self._motor_running = False
         
         # Initialize to safe state
@@ -112,9 +123,52 @@ class SolidDoser:
         
         logger.info("Solid Doser initialized successfully")
         logger.info(f"  Gate servo: channel {self.GATE_SERVO}")
-        logger.info(f"  Motor relay: GPIO {self.MOTOR_RELAY_PIN}")
+        relay_type = "Low-level trigger" if self.LOW_LEVEL_TRIGGER else "High-level trigger"
+        logger.info(f"  Motor relay: GPIO {self.MOTOR_RELAY_PIN} ({relay_type})")
         logger.info(f"  I2C address: 0x{i2c_address:02X}")
+        logger.info(f"  Gate range: {self.GATE_MAX_EXTENSION} (extended) to {self.GATE_MAX_CONTRACTION} (contracted)")
+        logger.info(f"  Contact point: {self.GATE_CONTACT} (servo {self.SERVO_CONTACT_POINT}°)")
         logger.info("  Note: Channels 3, 6, 9 reserved for plate_loader")
+    
+    def _gate_to_servo_angle(self, gate_position: float) -> float:
+        """
+        Convert user-friendly gate position to servo angle.
+        
+        Gate position coordinate system:
+        - Positive = extended (pushing gate open)
+        - 0 = contact point (pin touching gate)
+        - Negative = contracted (pin pulled back, gate closed)
+        
+        Args:
+            gate_position: Position in user coordinates
+            
+        Returns:
+            Servo angle (30-85 degrees)
+        """
+        # Map: gate position → servo angle
+        # gate_position = 35 → servo = 30 (fully extended)
+        # gate_position = 0 → servo = 65 (contact)
+        # gate_position = -20 → servo = 85 (fully contracted)
+        
+        # Clamp to valid range
+        gate_position = max(self.GATE_MAX_CONTRACTION, min(gate_position, self.GATE_MAX_EXTENSION))
+        
+        # Linear mapping: servo_angle = contact_point - gate_position
+        servo_angle = self.SERVO_CONTACT_POINT - gate_position
+        
+        return servo_angle
+    
+    def _servo_to_gate_angle(self, servo_angle: float) -> float:
+        """
+        Convert servo angle to user-friendly gate position.
+        
+        Args:
+            servo_angle: Servo angle (30-85 degrees)
+            
+        Returns:
+            Gate position in user coordinates
+        """
+        return self.SERVO_CONTACT_POINT - servo_angle
     
     def motor_on(self):
         """
@@ -123,7 +177,9 @@ class SolidDoser:
         """
         if not self._motor_running:
             logger.info("Starting motor...")
-            GPIO.output(self.MOTOR_RELAY_PIN, GPIO.HIGH)
+            # Low-level trigger: LOW=ON, High-level trigger: HIGH=ON
+            on_state = GPIO.LOW if self.LOW_LEVEL_TRIGGER else GPIO.HIGH
+            GPIO.output(self.MOTOR_RELAY_PIN, on_state)
             self._motor_running = True
             logger.info(f"Waiting {self.MOTOR_STARTUP_DELAY}s for motor to reach steady state...")
             time.sleep(self.MOTOR_STARTUP_DELAY)
@@ -135,50 +191,61 @@ class SolidDoser:
         """
         if self._motor_running:
             logger.info("Stopping motor...")
-            GPIO.output(self.MOTOR_RELAY_PIN, GPIO.LOW)
+            # Low-level trigger: HIGH=OFF, High-level trigger: LOW=OFF
+            off_state = GPIO.HIGH if self.LOW_LEVEL_TRIGGER else GPIO.LOW
+            GPIO.output(self.MOTOR_RELAY_PIN, off_state)
             self._motor_running = False
     
-    def open_gate(self, angle: Optional[float] = None):
+    def open_gate(self, gate_position: Optional[float] = None):
         """
-        Open the hopper gate to allow solid flow.
+        Open the hopper gate by extending the pin to allow solid flow.
         Power-safe: Includes delay after movement.
         
         Args:
-            angle: Specific angle to open (None = fully open to GATE_OPEN_ANGLE)
+            gate_position: Gate position in user coordinates (None = fully extended to 35)
+                          Positive values extend the pin (0 to 35)
+                          0 = contact point (servo 65°)
         """
-        target = angle if angle is not None else self.GATE_OPEN_ANGLE
-        target = max(self.GATE_CLOSED_ANGLE, min(target, self.GATE_OPEN_ANGLE))
+        target = gate_position if gate_position is not None else self.GATE_MAX_EXTENSION
+        target = max(self.GATE_CONTACT, min(target, self.GATE_MAX_EXTENSION))
         
-        logger.info(f"Opening gate to {target}°")
-        self.gate_servo.angle = target
+        servo_angle = self._gate_to_servo_angle(target)
+        logger.info(f"Opening gate to position {target} (servo {servo_angle}°)")
+        self.gate_servo.angle = servo_angle
         self._gate_position = target
         time.sleep(self.SERVO_MOVE_DELAY)  # Power-safe delay
     
     def close_gate(self):
         """
-        Close the hopper gate to stop solid flow.
+        Close the hopper gate by contracting the pin to stop solid flow.
+        Contracts to position -20 (servo 85°).
         Power-safe: Includes delay after movement.
         """
-        logger.info(f"Closing gate from {self._gate_position}° to {self.GATE_CLOSED_ANGLE}°")
-        self.gate_servo.angle = self.GATE_CLOSED_ANGLE
-        self._gate_position = self.GATE_CLOSED_ANGLE
+        target = self.GATE_MAX_CONTRACTION
+        servo_angle = self._gate_to_servo_angle(target)
+        logger.info(f"Closing gate from position {self._gate_position} to {target} (servo {servo_angle}°)")
+        self.gate_servo.angle = servo_angle
+        self._gate_position = target
         time.sleep(self.SERVO_MOVE_DELAY)  # Power-safe delay
     
-    def set_gate_angle(self, angle: float):
+    def set_gate_position(self, gate_position: float):
         """
-        Set gate to a specific angle for precise flow control.
+        Set gate to a specific position for precise flow control.
         Power-safe: Includes delay after movement.
         
         Args:
-            angle: Target angle (0-90 degrees)
+            gate_position: Target position in user coordinates
+                          Range: -20 (fully contracted, servo 85°) to 35 (fully extended, servo 30°)
+                          0 = contact point (servo 65°)
         """
-        angle = max(self.GATE_CLOSED_ANGLE, min(angle, self.GATE_OPEN_ANGLE))
-        logger.info(f"Setting gate to {angle}°")
-        self.gate_servo.angle = angle
-        self._gate_position = angle
+        target = max(self.GATE_MAX_CONTRACTION, min(gate_position, self.GATE_MAX_EXTENSION))
+        servo_angle = self._gate_to_servo_angle(target)
+        logger.info(f"Setting gate to position {target} (servo {servo_angle}°)")
+        self.gate_servo.angle = servo_angle
+        self._gate_position = target
         time.sleep(self.SERVO_MOVE_DELAY)  # Power-safe delay
     
-    def dispense(self, duration: float, gate_angle: Optional[float] = None):
+    def dispense(self, duration: float, gate_position: Optional[float] = None):
         """
         Dispense solid material for specified duration.
         
@@ -186,12 +253,13 @@ class SolidDoser:
         1. Start motor and wait for steady state
         2. Open gate (low current operation)
         3. Run for specified duration
-        4. Close gate
+        4. Close gate (to -20)
         5. Stop motor
         
         Args:
             duration: Dispensing time in seconds
-            gate_angle: Gate opening angle (None = fully open)
+            gate_position: Gate position in user coordinates (None = fully extended to 35)
+                          Range: 0 (contact) to 35 (fully extended)
         """
         logger.info(f"Starting dispense: {duration}s")
         
@@ -200,8 +268,8 @@ class SolidDoser:
             self.motor_on()
             
             # Step 2: Open gate (motor already at steady state)
-            if gate_angle is not None:
-                self.open_gate(gate_angle)
+            if gate_position is not None:
+                self.open_gate(gate_position)
             else:
                 self.open_gate()
             
@@ -241,16 +309,19 @@ class SolidDoser:
         """
         Calibration routine to test gate servo and motor.
         Runs power-safe sequential operations.
+        Tests: fully contracted (-20), contact (0), half extension (15), fully extended (35).
         """
         logger.info("Starting solid doser calibration...")
         
         # Test gate
         logger.info("Testing gate servo...")
-        self.close_gate()
+        self.close_gate()  # Fully contracted (-20, servo 85°)
         time.sleep(1)
-        self.open_gate()
+        self.set_gate_position(self.GATE_CONTACT)  # Contact point (0, servo 65°)
         time.sleep(1)
-        self.set_gate_angle(45)  # Half open
+        self.set_gate_position(15)  # Half extension (servo 50°)
+        time.sleep(1)
+        self.open_gate()  # Fully extended (35, servo 30°)
         time.sleep(1)
         self.close_gate()
         
@@ -267,12 +338,12 @@ class SolidDoser:
         Get current status of doser components.
         
         Returns:
-            Dictionary with gate position, motor state
+            Dictionary with gate position (user coordinates), motor state, and dispensing status
         """
         return {
             "gate_position": self._gate_position,
             "motor_running": self._motor_running,
-            "is_dispensing": self._motor_running and self._gate_position > self.GATE_CLOSED_ANGLE
+            "is_dispensing": self._motor_running and self._gate_position > self.GATE_CONTACT
         }
     
     def home(self):
