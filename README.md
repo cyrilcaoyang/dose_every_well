@@ -300,7 +300,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Yang Cao**
 - Email: yangcyril.cao@utoronto.ca
-- GitHub: [@yourusername](https://github.com/yourusername)
 
 ## Citation
 
@@ -311,7 +310,7 @@ If you use this package in your research, please cite:
   author = {Cao, Yang},
   title = {Dose Every Well: CNC-based Automated Dispensing},
   year = {2025},
-  url = {https://github.com/yourusername/dose_every_well}
+  url = {https://github.com/AccelerationConsortium/dose_every_well}
 }
 ```
 
