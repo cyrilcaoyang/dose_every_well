@@ -36,6 +36,16 @@ cd dose_every_well
 pip install -e .
 ```
 
+**For Raspberry Pi hardware support (Plate Loader, Solid Doser):**
+
+```bash
+# Install with Raspberry Pi dependencies
+pip install -e ".[rpi]"
+
+# For Raspberry Pi 5, also install rpi-lgpio (RPi.GPIO compatibility layer)
+pip install rpi-lgpio
+```
+
 ### Basic Usage
 
 ```python
@@ -72,7 +82,7 @@ python demo/solid_doser_demo.py
 |----------|--------|-------|
 | Windows 7/10/11 | Supported | Works out of box |
 | Linux (Ubuntu/Debian) | Supported | Requires dialout group |
-| Raspberry Pi 3/4/5 | Supported | Tested on Pi 5 |
+| Raspberry Pi 3/4/5 | Supported | Pi 5 requires `rpi-lgpio` |
 | macOS (Intel/M1/M2) | Supported | Full support |
 
 ## Documentation

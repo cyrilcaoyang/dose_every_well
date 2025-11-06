@@ -46,6 +46,18 @@ sudo usermod -a -G dialout $USER
 
 Log out and back in for changes to take effect.
 
+**For Raspberry Pi Hardware (Plate Loader, Solid Doser):**
+
+```bash
+# Install with Raspberry Pi hardware dependencies
+pip install -e ".[rpi]"
+
+# For Raspberry Pi 5, also install rpi-lgpio (required for GPIO support)
+pip install rpi-lgpio
+```
+
+Note: Raspberry Pi 5 uses a different GPIO chip that requires `rpi-lgpio` as a compatibility layer for `RPi.GPIO`. Pi 3/4 work with standard `RPi.GPIO`.
+
 ### Windows
 
 No additional setup required. Works out of the box.
@@ -75,6 +87,11 @@ Automatically installed:
 - pyserial == 3.5
 - matplotlib == 3.10.0
 - PyYAML == 6.0.2
+
+Optional (for Raspberry Pi hardware):
+- adafruit-circuitpython-pca9685
+- adafruit-circuitpython-motor
+- rpi-lgpio (Raspberry Pi 5 only)
 
 ## Troubleshooting
 

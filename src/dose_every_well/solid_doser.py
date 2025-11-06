@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 """
 Solid Doser Controller
-Controls solid dosing mechanism using Waveshare PCA9685 HAT and GPIO relay.
+Controls DC motor via relay and servo via PCA9685.
 
 Hardware:
 - Raspberry Pi 5
-- Waveshare PCA9685 HAT (I2C default address 0x40, servo pins 3-8)
-- 1x Servo Motor (Channel 0): Hopper gate/valve control
-- 1x 5V Relay Module (GPIO): DC motor ON/OFF control
-- 1x DC Motor: Auger/screw feeder for solid dispensing
+- Waveshare PCA9685 HAT (I2C default address 0x40)
+- 1x Servo Motor (Channel 0): Gate control
+- 1x 5V Relay Module (GPIO 17): DC motor ON/OFF control
+- 1x DC Motor: Auger/screw feeder
 
 Power:
 - Single 5V 5A power supply for Pi, servos, and motor
 - Sequential operation to stay within power budget
 - Motor reaches steady state before servos move
+
+Simple Usage:
+    doser = SolidDoser()
+    doser.motor_on()
+    doser.set_servo_angle(90)
+    doser.motor_off()
+    doser.shutdown()
 """
 
 import time
@@ -27,7 +34,8 @@ try:
     import RPi.GPIO as GPIO
 except ImportError as e:
     print("Required libraries not installed. On Raspberry Pi, run:")
-    print("  pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor RPi.GPIO")
+    print("  pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor")
+    print("  pip install rpi-lgpio  # Required for Raspberry Pi 5")
     raise e
 
 
@@ -49,7 +57,7 @@ class SolidDoser:
     - Designed for 5V 5A power supply
     
     Attributes:
-        GATE_SERVO: Channel 3 (Pin 3 on HAT) - Hopper gate/valve servo
+        GATE_SERVO: Channel 0 Hopper gate/valve servo
         MOTOR_RELAY_PIN: GPIO pin controlling relay for DC motor
     """
     
@@ -60,8 +68,10 @@ class SolidDoser:
     # GPIO pin for relay control
     MOTOR_RELAY_PIN = 17  # BCM GPIO 17 (Physical Pin 11)
     
-    # Relay trigger type
-    LOW_LEVEL_TRIGGER = True  # True = LOW turns relay ON, False = HIGH turns relay ON
+    # Relay type: Normal Open (NO) with HIGH-level trigger
+    # GPIO HIGH → Relay ON → Motor runs
+    # GPIO LOW → Relay OFF → Motor stops
+    RELAY_NO = True  # True = Normal Open, False = Normal Closed
     
     # Servo physical angle limits (servo library angles)
     SERVO_FULLY_EXTENDED = 30   # Pin fully extended (pushed out)
@@ -76,12 +86,16 @@ class SolidDoser:
     
     # Power management delays
     MOTOR_STARTUP_DELAY = 0.5  # Wait for motor to reach steady state
-    SERVO_MOVE_DELAY = 0.3     # Wait between servo movements
+    SERVO_MOVE_DELAY = 0.5     # Wait between servo movements
     
-    def __init__(self, i2c_address: int = 0x40, motor_gpio_pin: int = 17, frequency: int = 50):
+    def __init__(
+        self, 
+        i2c_address: int = 0x40, 
+        motor_gpio_pin: int = 17, 
+        frequency: int = 50
+        ):
         """
         Initialize the solid doser controller.
-        
         Args:
             i2c_address: I2C address of PCA9685 (default 0x40 for Waveshare HAT)
             motor_gpio_pin: GPIO pin (BCM) for relay control (default 17)
@@ -90,15 +104,15 @@ class SolidDoser:
         logger.info("Initializing Solid Doser...")
         
         # Store GPIO pin
-        self.MOTOR_RELAY_PIN = motor_gpio_pin
+        self.dc_relay_pin = motor_gpio_pin
         
         # Initialize GPIO for relay
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
-        GPIO.setup(self.MOTOR_RELAY_PIN, GPIO.OUT)
-        # Start with motor OFF (depends on relay trigger type)
-        initial_state = GPIO.HIGH if self.LOW_LEVEL_TRIGGER else GPIO.LOW
-        GPIO.output(self.MOTOR_RELAY_PIN, initial_state)
+        GPIO.setup(self.dc_relay_pin, GPIO.OUT)
+        # Start with motor OFF (HIGH-level trigger: LOW = OFF)
+        initial_state = GPIO.LOW if self.RELAY_NO else GPIO.HIGH
+        GPIO.output(self.dc_relay_pin, initial_state)
         
         # Initialize I2C bus
         self.i2c = busio.I2C(board.SCL, board.SDA)
@@ -123,8 +137,8 @@ class SolidDoser:
         
         logger.info("Solid Doser initialized successfully")
         logger.info(f"  Gate servo: channel {self.GATE_SERVO}")
-        relay_type = "Low-level trigger" if self.LOW_LEVEL_TRIGGER else "High-level trigger"
-        logger.info(f"  Motor relay: GPIO {self.MOTOR_RELAY_PIN} ({relay_type})")
+        relay_type = "Normal Open (NO)" if self.RELAY_NO else "Normal Closed (NC)"
+        logger.info(f"  Motor relay: GPIO {self.dc_relay_pin} ({relay_type})")
         logger.info(f"  I2C address: 0x{i2c_address:02X}")
         logger.info(f"  Gate range: {self.GATE_MAX_EXTENSION} (extended) to {self.GATE_MAX_CONTRACTION} (contracted)")
         logger.info(f"  Contact point: {self.GATE_CONTACT} (servo {self.SERVO_CONTACT_POINT}°)")
@@ -177,9 +191,9 @@ class SolidDoser:
         """
         if not self._motor_running:
             logger.info("Starting motor...")
-            # Low-level trigger: LOW=ON, High-level trigger: HIGH=ON
-            on_state = GPIO.LOW if self.LOW_LEVEL_TRIGGER else GPIO.HIGH
-            GPIO.output(self.MOTOR_RELAY_PIN, on_state)
+            # HIGH-level trigger: HIGH=ON, LOW=OFF
+            on_state = GPIO.HIGH if self.RELAY_NO else GPIO.LOW
+            GPIO.output(self.dc_relay_pin, on_state)
             self._motor_running = True
             logger.info(f"Waiting {self.MOTOR_STARTUP_DELAY}s for motor to reach steady state...")
             time.sleep(self.MOTOR_STARTUP_DELAY)
@@ -188,13 +202,13 @@ class SolidDoser:
     def motor_off(self):
         """
         Turn DC motor OFF via relay.
+        Always sends OFF signal regardless of internal state.
         """
-        if self._motor_running:
-            logger.info("Stopping motor...")
-            # Low-level trigger: HIGH=OFF, High-level trigger: LOW=OFF
-            off_state = GPIO.HIGH if self.LOW_LEVEL_TRIGGER else GPIO.LOW
-            GPIO.output(self.MOTOR_RELAY_PIN, off_state)
-            self._motor_running = False
+        logger.info("Stopping motor...")
+        # HIGH-level trigger: LOW=OFF, HIGH=ON
+        off_state = GPIO.LOW if self.RELAY_NO else GPIO.HIGH
+        GPIO.output(self.dc_relay_pin, off_state)
+        self._motor_running = False
     
     def open_gate(self, gate_position: Optional[float] = None):
         """
@@ -374,7 +388,7 @@ def main():
     
     try:
         # Initialize doser
-        doser = SolidDoser(i2c_address=0x70, motor_gpio_pin=17)
+        doser = SolidDoser(i2c_address=0x40, motor_gpio_pin=17)
         
         # Calibration
         print("\n1. Running calibration...")
