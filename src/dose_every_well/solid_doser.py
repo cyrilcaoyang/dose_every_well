@@ -68,10 +68,10 @@ class SolidDoser:
     # GPIO pin for relay control
     MOTOR_RELAY_PIN = 17  # BCM GPIO 17 (Physical Pin 11)
     
-    # Relay type: Normal Open (NO) with HIGH-level trigger
+    # Relay configuration: Active HIGH (relay turns on when GPIO is HIGH)
     # GPIO HIGH → Relay ON → Motor runs
     # GPIO LOW → Relay OFF → Motor stops
-    RELAY_NO = True  # True = Normal Open, False = Normal Closed
+    RELAY_NO = True  # True = Normal Open relay with active HIGH trigger
     
     # Servo physical angle limits (servo library angles)
     SERVO_FULLY_EXTENDED = 30   # Pin fully extended (pushed out)
@@ -103,16 +103,8 @@ class SolidDoser:
         """
         logger.info("Initializing Solid Doser...")
         
-        # Store GPIO pin
+        # Store GPIO pin (setup happens in motor_on)
         self.dc_relay_pin = motor_gpio_pin
-        
-        # Initialize GPIO for relay
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)
-        GPIO.setup(self.dc_relay_pin, GPIO.OUT)
-        # Start with motor OFF (HIGH-level trigger: LOW = OFF)
-        initial_state = GPIO.LOW if self.RELAY_NO else GPIO.HIGH
-        GPIO.output(self.dc_relay_pin, initial_state)
         
         # Initialize I2C bus
         self.i2c = busio.I2C(board.SCL, board.SDA)
@@ -187,13 +179,16 @@ class SolidDoser:
     def motor_on(self):
         """
         Turn DC motor ON via relay.
-        Includes startup delay for power-safe operation.
+        Sets up GPIO and turns motor on.
         """
         if not self._motor_running:
             logger.info("Starting motor...")
-            # HIGH-level trigger: HIGH=ON, LOW=OFF
+            # Setup GPIO and turn ON
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setwarnings(False)
+            # Active HIGH: HIGH=ON, LOW=OFF
             on_state = GPIO.HIGH if self.RELAY_NO else GPIO.LOW
-            GPIO.output(self.dc_relay_pin, on_state)
+            GPIO.setup(self.dc_relay_pin, GPIO.OUT, initial=on_state)
             self._motor_running = True
             logger.info(f"Waiting {self.MOTOR_STARTUP_DELAY}s for motor to reach steady state...")
             time.sleep(self.MOTOR_STARTUP_DELAY)
@@ -202,12 +197,10 @@ class SolidDoser:
     def motor_off(self):
         """
         Turn DC motor OFF via relay.
-        Always sends OFF signal regardless of internal state.
+        Uses GPIO.cleanup() to reset pin and turn off motor.
         """
         logger.info("Stopping motor...")
-        # HIGH-level trigger: LOW=OFF, HIGH=ON
-        off_state = GPIO.LOW if self.RELAY_NO else GPIO.HIGH
-        GPIO.output(self.dc_relay_pin, off_state)
+        GPIO.cleanup()
         self._motor_running = False
     
     def open_gate(self, gate_position: Optional[float] = None):
@@ -366,6 +359,7 @@ class SolidDoser:
         """
         logger.info("Homing solid doser...")
         self.motor_off()
+        time.sleep(0.5)
         self.close_gate()
         logger.info("Solid doser at home position")
     
@@ -374,9 +368,8 @@ class SolidDoser:
         Safely shutdown the controller.
         """
         logger.info("Shutting down Solid Doser...")
-        self.home()
+        self.home()  # This calls motor_off() which does GPIO.cleanup()
         self.pca.deinit()
-        GPIO.cleanup()
         logger.info("Solid Doser shutdown complete")
 
 
