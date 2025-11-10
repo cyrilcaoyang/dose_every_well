@@ -32,7 +32,7 @@ servo_limits:
   plate_down_angle: 90     # Well plate fully lowered (90°)
   plate_up_angle: -90      # Well plate fully raised (-90°)
   lid_closed_angle: 178    # Lid closed position (178°)
-  lid_open_angle: 30       # Lid fully open position (30°)
+  lid_open_angle: 32       # Lid fully open position (30°)
 
 # Movement parameters
 movement:
