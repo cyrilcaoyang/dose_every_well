@@ -150,7 +150,7 @@ class CNC_Controller:
         self.gcode += "G0 Z0\n"
 
     def move_to_height(self, z):
-        self.gcode += f"G0 Z{z}"
+        self.gcode += f"G0 Z{z}\n"
 
     def move_to_point(self, x, y):
         if self.coordinates_within_bounds(x, y):
@@ -183,6 +183,7 @@ class CNC_Controller:
                 self.wait_for_movement_completion(ser, buffered_gcode)
                 grbl_out = ser.readline()
                 out_strings.append(grbl_out.strip().decode('utf-8'))
+            self.gcode = ""  # Clear the gcode buffer after execution
             return out_strings
 
 if __name__ == "__main__":

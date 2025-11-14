@@ -797,7 +797,7 @@ def main():
     print("Initializing...")
     
     try:
-        loader = PlateLoader()
+        loader = PlateLoader(plate_type='shallow_plate')
         
         # Calibration
         print("\n1. Running calibration...")
